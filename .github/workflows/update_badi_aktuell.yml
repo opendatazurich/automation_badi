@@ -1,0 +1,62 @@
+name: Update Badi Aktuell (Crowd Monitor)
+
+on:
+  schedule:
+    - cron:  '3/5 * * * *' # every 5min
+  workflow_dispatch:
+
+
+jobs:
+  update_data_py:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: integration
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.1.0
+      
+    - name: "Set up Python"
+      uses: actions/setup-python@v6
+      with:
+        python-version: 3.12
+
+    - name: Install requirements
+      run: uv pip install -r automation-requirements.txt
+      env:
+        UV_SYSTEM_PYTHON: 1
+
+    - name: Download automation scripts
+      run: |
+        curl -O https://raw.githubusercontent.com/opendatazurich/opendatazurich.github.io/master/automation/xls_to_meta_xml.py
+        curl -O https://raw.githubusercontent.com/opendatazurich/opendatazurich.github.io/master/automation/read_meta_xml.py
+        curl -O https://raw.githubusercontent.com/opendatazurich/opendatazurich.github.io/master/automation/xmlparse.py
+        curl -O https://raw.githubusercontent.com/opendatazurich/opendatazurich.github.io/master/automation/update_metadata.py
+        curl -O https://raw.githubusercontent.com/opendatazurich/opendatazurich.github.io/master/automation/upload_resource_to_ckan_with_patch.py
+
+    - name: Prepare data
+      env:
+        CROWD_MONITOR_USER: ${{ secrets.CROWD_MONITOR_USER }}
+        CROWD_MONITOR_PW: ${{ secrets.CROWD_MONITOR_PW }}
+      run: python badi_aktuell_crowdmonitor/crowd-monitor.py
+
+    - name: Upload file to CKAN
+      env:
+        CKAN_BASE_URL: ${{ secrets.CKAN_BASE_URL }}
+        CKAN_API_KEY: ${{ secrets.CKAN_API_KEY }}
+        SSL_VERIFY: ${{ secrets.SSL_VERIFY }}
+      run: |
+        python upload_resource_to_ckan_with_patch.py -f badi_aktuell_crowdmonitor/crowd-monitor.csv -d ssd_spo_badi_aktuell
+
+    - name: Update CKAN metadata
+      env:
+        CKAN_BASE_URL: ${{ secrets.CKAN_BASE_URL }}
+        CKAN_API_KEY: ${{ secrets.CKAN_API_KEY }}
+        SSL_VERIFY: ${{ secrets.SSL_VERIFY }}
+      run: |
+        python xls_to_meta_xml.py -f badi_aktuell_crowdmonitor/meta_ssd_badi_aktuell.xlsx --outfile badi_aktuell_crowdmonitor/meta.xml --tag github
+        python update_metadata.py -d ssd_spo_badi_aktuell -f badi_aktuell_crowdmonitor/meta.xml
+
+

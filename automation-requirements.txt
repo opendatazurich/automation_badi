@@ -1,0 +1,10 @@
+python-dotenv
+requests
+ckanapi
+docopt-ng
+pytz
+defusedxml
+openpyxl
+dateparser
+pandas
+lxml
